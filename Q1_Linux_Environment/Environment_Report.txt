@@ -1,0 +1,198 @@
+=========================================================
+       LINUX ENVIRONMENT VERIFICATION REPORT
+       Submitted by: Ujjwal Prakash
+       Date: July 1, 2026
+       Role: Linux Support Engineer (Lab Simulation)
+=========================================================
+
+OBJECTIVE:
+Before accessing company resources, verify the Linux environment and user
+account details including username, groups, shell, working directory, file
+listing, and network connectivity.
+
+=========================================================
+COMMAND 1: Verify Username
+=========================================================
+
+Command Executed:
+$ whoami
+
+Output:
+ujjwalprakash
+
+Observation:
+The whoami command returned "ujjwalprakash", confirming the currently logged-in
+user account. This is a standard first step in any support workflow to verify
+identity before proceeding with system access. I confirmed I am not operating as
+root, which is important for maintaining security and least-privilege principles.
+
+=========================================================
+COMMAND 2: View Full User Identity (UID/GID)
+=========================================================
+
+Command Executed:
+$ id
+
+Output:
+uid=501(ujjwalprakash) gid=20(staff) groups=20(staff),12(everyone),
+61(localaccounts),79(_appserverusr),80(admin),81(_appserveradm),
+701(com.apple.sharepoint.group.1),33(_appstore),98(_lpadmin),100(_lpoperator),
+204(_developer),250(_analyticsusers),395(com.apple.access_ftp),
+398(com.apple.access_screensharing),399(com.apple.access_ssh),
+400(com.apple.access_remote_ae)
+
+Observation:
+The id command gives a more detailed view than whoami. The UID is 501 and primary
+group (GID) is 20 (staff). Notably, the account belongs to the "admin" group
+(GID 80), meaning elevated privileges are available. The account also has access
+to SSH (com.apple.access_ssh), screen sharing, and FTP – all relevant from a
+support engineer's perspective.
+
+=========================================================
+COMMAND 3: Check Group Membership
+=========================================================
+
+Command Executed:
+$ groups
+
+Output:
+staff everyone localaccounts _appserverusr admin _appserveradm
+com.apple.sharepoint.group.1 _appstore _lpadmin _lpoperator _developer
+_analyticsusers com.apple.access_ftp com.apple.access_screensharing
+com.apple.access_ssh com.apple.access_remote_ae
+
+Observation:
+The groups command listed 15 groups associated with this account. The most notable
+ones are "admin" (indicating sudo/administrative access), "staff" (primary group),
+and "_developer" (development tools access). The presence of com.apple.access_ssh
+confirms that remote SSH logins are permitted for this account. This is typical for
+a developer or support engineer's account on macOS.
+
+=========================================================
+COMMAND 4: Identify Current Shell
+=========================================================
+
+Command Executed:
+$ echo $SHELL
+
+Output:
+/bin/zsh
+
+Observation:
+The default shell is /bin/zsh (Z Shell), which is the default shell on macOS
+since Catalina (10.15). Zsh offers advanced features over bash including better
+tab-completion, globbing, and plugin support. Knowing the active shell is important
+when writing shell scripts to ensure compatibility with the correct interpreter.
+
+=========================================================
+COMMAND 5: Check Current Working Directory
+=========================================================
+
+Command Executed:
+$ pwd
+
+Output:
+/Users/ujjwalprakash
+
+Observation:
+The pwd (Print Working Directory) command confirmed the current directory is
+/Users/ujjwalprakash, which is my home directory. On macOS this is equivalent
+to the ~ (tilde) shorthand. Confirming the working directory prevents accidental
+file operations in unintended locations.
+
+=========================================================
+COMMAND 6: List Files and Directories
+=========================================================
+
+Command Executed:
+$ ls -la
+
+Output (partial):
+total 141576
+drwxr-x---+ 278 ujjwalprakash  staff     8896 Jun 24 20:11 .
+drwxr-xr-x    5 root           admin      160 Oct 21  2025 ..
+-r--------    1 ujjwalprakash  staff        7 Jul 31  2025 .CFUserTextEncoding
+-rw-r--r--@   1 ujjwalprakash  staff    32772 Jun 25 11:28 .DS_Store
+drwx------+   2 ujjwalprakash  staff       64 Jun 22 12:29 .Trash
+drwxr-xr-x@   5 ujjwalprakash  staff      160 Mar 23 19:12 .android
+-rw-r--r--@   1 ujjwalprakash  staff       94 Sep  7  2025 .gitconfig
+drwxr-xr-x   13 ujjwalprakash  staff      416 May  5 20:48 .git
+...
+(278 total entries in home directory)
+
+Observation:
+The ls -la command lists all files including hidden ones (those starting with a dot).
+The home directory has 278 entries including configuration files like .gitconfig,
+.zshrc, .zsh_history, and various project directories. The -l flag shows permissions,
+ownership, file size, and last-modified timestamp. The @ symbol in permissions indicates
+macOS extended attributes. The parent directory (..) is owned by root, which is expected
+since /Users is a system-managed directory.
+
+=========================================================
+COMMAND 7: Verify Network Connectivity
+=========================================================
+
+Command Executed:
+$ ping -c 4 google.com
+
+Output:
+PING google.com (142.251.43.238): 56 data bytes
+64 bytes from 142.251.43.238: icmp_seq=0 ttl=117 time=10.982 ms
+64 bytes from 142.251.43.238: icmp_seq=1 ttl=117 time=8.491 ms
+64 bytes from 142.251.43.238: icmp_seq=2 ttl=117 time=11.946 ms
+64 bytes from 142.251.43.238: icmp_seq=3 ttl=117 time=11.946 ms
+
+--- google.com ping statistics ---
+4 packets transmitted, 4 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 8.491/10.710/11.946/1.326 ms
+
+Observation:
+All 4 ICMP echo packets were successfully transmitted and received with 0.0% packet
+loss. The average round-trip time is approximately 10.7 ms, which indicates a stable
+and low-latency internet connection. Google's IP was resolved to 142.251.43.238,
+confirming DNS resolution is also working correctly. Network connectivity to external
+servers is verified and functional.
+
+=========================================================
+COMMAND 8: System Kernel Information
+=========================================================
+
+Command Executed:
+$ uname -a
+
+Output:
+Darwin Ujjwals-MacBook-Air.local 25.0.0 Darwin Kernel Version 25.0.0:
+Wed Sep 17 21:38:03 PDT 2025; root:xnu-12377.1.9~141/RELEASE_ARM64_T8112 arm64
+
+Observation:
+The uname -a command displays the complete system information. The system hostname
+is "Ujjwals-MacBook-Air.local", running Darwin kernel version 25.0.0 (macOS). The
+architecture is ARM64 (Apple Silicon - M1 chip, T8112 identifier), which is relevant
+for understanding which binaries are compatible with this system.
+
+=========================================================
+ENVIRONMENT SUMMARY
+=========================================================
+
+| Parameter              | Value                              |
+|------------------------|------------------------------------|
+| Username               | ujjwalprakash                      |
+| UID                    | 501                                |
+| Primary Group          | staff (GID 20)                     |
+| Total Groups           | 15                                 |
+| Admin Access           | Yes (via admin group)              |
+| Current Shell          | /bin/zsh                           |
+| Working Directory      | /Users/ujjwalprakash               |
+| Hostname               | Ujjwals-MacBook-Air.local          |
+| Kernel                 | Darwin 25.0.0 (ARM64)              |
+| Files in Home Dir      | 278 entries                        |
+| Network Status         | CONNECTED (0% packet loss)         |
+| Avg. Ping to Google    | 10.710 ms                          |
+
+=========================================================
+OVERALL OBSERVATION:
+The Linux/Unix environment is fully operational. The user account "ujjwalprakash"
+has standard user privileges along with admin group membership which allows elevated
+operations when required. The shell, directory, and network connectivity are all
+configured and functional. The system is ready to access company resources securely.
+=========================================================

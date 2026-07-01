@@ -1,0 +1,209 @@
+=========================================================
+     SECURE PROJECT WORKSPACE SETUP REPORT
+     Submitted by: Ujjwal Prakash
+     Date: July 1, 2026
+     Scenario: Setting up a secure project workspace for a development team
+=========================================================
+
+OBJECTIVE:
+Create a secure project workspace for a software development team. The workspace
+must have separate folders for different types of project assets and appropriate
+file system permissions to protect sensitive data from unauthorized access.
+
+=========================================================
+COMMAND 1: Create Workspace Directory Structure
+=========================================================
+
+Command Executed:
+$ mkdir -p ProjectWorkspace/{docs,scripts,logs,backup}
+
+Output:
+(No output — directory created successfully)
+
+Observation:
+I used the mkdir command with the -p flag (parents) and brace expansion to create
+all four subdirectories in a single command. The brace expansion {docs,scripts,logs,backup}
+creates all directories simultaneously without needing four separate mkdir calls.
+The structure separates documentation, automation scripts, runtime logs, and backups
+into dedicated directories — a best practice in professional project environments.
+
+=========================================================
+COMMAND 2: Create Sample Project Files
+=========================================================
+
+Commands Executed:
+$ touch ProjectWorkspace/docs/plan.txt
+$ touch ProjectWorkspace/docs/requirements.txt
+$ touch ProjectWorkspace/scripts/deploy.sh
+$ touch ProjectWorkspace/logs/access.log
+
+Observation:
+The touch command was used to create empty placeholder files in the appropriate
+subdirectories. plan.txt and requirements.txt are documentation files, deploy.sh
+is a deployment automation script, and access.log is a runtime log file. These
+represent a realistic project file structure.
+
+=========================================================
+COMMAND 3: Check Initial Permissions (BEFORE chmod)
+=========================================================
+
+Command Executed:
+$ ls -ld ProjectWorkspace
+$ ls -la ProjectWorkspace
+
+Output:
+drwxr-xr-x@ 6 ujjwalprakash  staff  192 Jul  1 21:10 ProjectWorkspace
+
+total 0
+drwxr-xr-x@ 6 ujjwalprakash  staff  192 Jul  1 21:10 .
+drwxr-xr-x@ 4 ujjwalprakash  staff  128 Jul  1 21:10 ..
+drwxr-xr-x@ 2 ujjwalprakash  staff   64 Jul  1 21:10 backup
+drwxr-xr-x@ 4 ujjwalprakash  staff  128 Jul  1 21:10 docs
+drwxr-xr-x@ 3 ujjwalprakash  staff   96 Jul  1 21:10 logs
+drwxr-xr-x@ 3 ujjwalprakash  staff   96 Jul  1 21:10 scripts
+
+Observation:
+The default permission for the newly created workspace directory was drwxr-xr-x
+(755 in octal). This means the owner has full read/write/execute access, but group
+members (staff) and others can read and execute (traverse). This is NOT suitable for
+a secure project workspace because other users on the same system could read the
+contents of docs and logs, potentially exposing sensitive files.
+
+=========================================================
+COMMAND 4: Check Ownership with stat
+=========================================================
+
+Command Executed:
+$ stat ProjectWorkspace
+
+Output:
+16777234 27939567 drwxr-xr-x 6 ujjwalprakash staff 0 192
+"Jul  1 21:10:47 2026" "Jul  1 21:10:47 2026" "Jul  1 21:10:47 2026"
+"Jul  1 21:10:47 2026" 4096 0 0 ProjectWorkspace
+
+Observation:
+The stat command gives more detailed metadata than ls. The inode number is 27939567,
+owner is "ujjwalprakash" and group is "staff". The timestamps for access, modification,
+and inode change are all the same, confirming this is a freshly created directory.
+The stat command is more reliable than ls for scripting because it outputs machine-
+readable metadata.
+
+=========================================================
+COMMAND 5: Check Current Umask
+=========================================================
+
+Command Executed:
+$ umask
+
+Output:
+022
+
+Observation:
+The umask value 022 means that when new files or directories are created, permissions
+are masked (subtracted). For files, the base is 666, so 666 - 022 = 644 (rw-r--r--).
+For directories, the base is 777, so 777 - 022 = 755 (rwxr-xr-x). This is why the
+newly created ProjectWorkspace had 755 permissions by default. If we wanted tighter
+default permissions, we could set umask to 077, which would result in 700 for directories
+and 600 for files — readable only by the owner.
+
+=========================================================
+COMMAND 6: Restrict Workspace Permissions (chmod 700)
+=========================================================
+
+Command Executed:
+$ chmod 700 ProjectWorkspace
+
+Output:
+(No output — permission change applied successfully)
+
+$ ls -ld ProjectWorkspace
+
+Output (AFTER chmod):
+drwx------@ 6 ujjwalprakash  staff  192 Jul  1 21:10 ProjectWorkspace
+
+Observation:
+After applying chmod 700, the workspace permissions changed from drwxr-xr-x (755)
+to drwx------ (700). Now only the owner (ujjwalprakash) can read, write, or enter
+the directory. Group members and all other users are completely denied access. This
+is a significant security improvement — even if another user is in the "staff" group,
+they can no longer list or access any files within ProjectWorkspace.
+
+=========================================================
+COMMAND 7: Apply File-Level Permissions
+=========================================================
+
+Commands Executed:
+$ chmod 755 ProjectWorkspace/scripts/deploy.sh
+$ chmod 640 ProjectWorkspace/docs/plan.txt
+
+$ ls -la ProjectWorkspace/docs
+
+Output:
+total 0
+drwxr-xr-x@ 4 ujjwalprakash  staff  128 Jul  1 21:10 .
+drwx------@ 6 ujjwalprakash  staff  192 Jul  1 21:10 ..
+-rw-r-----@ 1 ujjwalprakash  staff    0 Jul  1 21:10 plan.txt
+-rw-r--r--@ 1 ujjwalprakash  staff    0 Jul  1 21:10 requirements.txt
+
+Observation:
+I applied different permissions to different file types based on their purpose:
+- deploy.sh (scripts): 755 — executable by owner, readable/executable by group and others.
+  Scripts need execute permission to run. Group members should be able to execute but
+  not modify shared deployment scripts.
+- plan.txt (sensitive docs): 640 — owner can read/write, group can read, others have no
+  access. Project planning documents may contain confidential information.
+
+=========================================================
+PERMISSION COMPARISON TABLE
+=========================================================
+
+| Resource              | Before chmod | After chmod | Octal |
+|-----------------------|-------------|-------------|-------|
+| ProjectWorkspace/     | drwxr-xr-x  | drwx------  |  700  |
+| docs/plan.txt         | -rw-r--r--  | -rw-r-----  |  640  |
+| docs/requirements.txt | -rw-r--r--  | -rw-r--r--  |  644  |
+| scripts/deploy.sh     | -rw-r--r--  | -rwxr-xr-x  |  755  |
+| logs/access.log       | -rw-r--r--  | -rw-r--r--  |  644  |
+
+=========================================================
+SECURITY EXPLANATION
+=========================================================
+
+How Permissions Protect Project Data:
+1. The root workspace directory (700) acts as the first line of defense. By denying
+   all group and world access at the directory level, even if a user knows a file path
+   inside the workspace, they cannot navigate into it.
+
+2. The docs/plan.txt at 640 ensures that sensitive project planning information can
+   only be read by the owner and members of the assigned group (staff). No external
+   user can access it.
+
+3. The scripts/deploy.sh at 755 allows the owner to modify the script, while group
+   and world users can execute it (useful for CI/CD pipelines or shared execution).
+
+4. The umask of 022 controls the default permissions for any future files created
+   within the workspace, preventing overly permissive files from being created
+   accidentally.
+
+=========================================================
+FINAL DIRECTORY STRUCTURE
+=========================================================
+
+ProjectWorkspace/         [drwx------]  Owner: ujjwalprakash
+├── docs/                 [drwxr-xr-x]
+│   ├── plan.txt          [-rw-r-----]
+│   └── requirements.txt  [-rw-r--r--]
+├── scripts/              [drwxr-xr-x]
+│   └── deploy.sh         [-rwxr-xr-x]
+├── logs/                 [drwxr-xr-x]
+│   └── access.log        [-rw-r--r--]
+└── backup/               [drwxr-xr-x]
+
+=========================================================
+CONCLUSION:
+The secure workspace was successfully created with an organized directory structure
+and permission scheme. The combination of a restrictive root directory (700) with
+file-specific permissions provides layered security, ensuring that the project
+workspace is only accessible to the authorized owner while specific assets remain
+shared with the team as needed.
+=========================================================

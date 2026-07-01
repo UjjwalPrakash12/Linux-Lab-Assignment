@@ -1,0 +1,11 @@
+# Q1 - Linux Environment Verification
+# All commands executed in sequence
+
+whoami
+id
+groups
+echo $SHELL
+pwd
+ls -la
+ping -c 4 google.com
+uname -a

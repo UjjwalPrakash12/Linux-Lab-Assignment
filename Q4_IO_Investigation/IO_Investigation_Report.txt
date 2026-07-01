@@ -1,0 +1,238 @@
+=========================================================
+     FILE ACCESS AND I/O INVESTIGATION REPORT
+     Submitted by: Ujjwal Prakash
+     Date: July 1, 2026
+     Scenario: Diagnosing logging issues in a production application
+=========================================================
+
+OBJECTIVE:
+An application was experiencing logging issues — some log messages were being lost
+and errors were not being saved to the correct file. This investigation examines
+Linux file I/O mechanisms including open files, file descriptors, output redirection,
+error redirection, and resource limits to understand and resolve the issue.
+
+=========================================================
+COMMAND 1: List Open Files Using lsof
+=========================================================
+
+Command Executed:
+$ lsof -u ujjwalprakash | head -15
+
+Output:
+COMMAND     PID          USER   FD      TYPE    DEVICE   SIZE/OFF    NODE NAME
+loginwind   399 ujjwalprakash  cwd       DIR      1,18        704       2 /
+loginwind   399 ujjwalprakash  txt       REG      1,18    3293824  ...    /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow
+loginwind   399 ujjwalprakash  txt       REG      1,18      72864  ...    /Library/Preferences/Logging/.plist-cache.0yp8awW0
+loginwind   399 ujjwalprakash  txt       REG      1,18        688  ...    /System/Library/CoreServices/loginwindow.app/Contents/Resources/InfoPlist.loctable
+loginwind   399 ujjwalprakash  txt       REG      1,18      110    ...    /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings
+loginwind   399 ujjwalprakash  txt       REG      1,18   137016    ...    /System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/SystemAppearance.car
+loginwind   399 ujjwalprakash  txt       REG      1,18   193408    ...    /System/Library/LoginPlugins/FSDisconnect.loginPlugin/Contents/MacOS/FSDisconnect
+loginwind   399 ujjwalprakash  txt       REG      1,18   305376    ...    /System/Library/LoginPlugins/DisplayServices.loginPlugin/Contents/MacOS/DisplayServices
+loginwind   399 ujjwalprakash  txt       REG      1,18   236112    ...    /private/var/db/timezone/tz/2026b.1.0/icutz/icutz44l.dat
+loginwind   399 ujjwalprakash  txt       REG      1,18   255956    ...    /System/Library/Frameworks/OpenDirectory.framework/.../Localizable.loctable
+loginwind   399 ujjwalprakash  txt       REG      1,18   249246    ...    /System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/...
+loginwind   399 ujjwalprakash  txt       REG      1,18   752384    ...    /System/Library/LoginPlugins/BezelServices.loginPlugin/...
+loginwind   399 ujjwalprakash  txt       REG      1,18  2299264    ...    /usr/lib/dyld
+loginwind   399 ujjwalprakash  txt       REG      1,18    73240    ...    /System/Library/CoreServices/SystemAppearance.bundle/.../FauxVibrantDark.car
+
+Observation:
+The lsof (List Open Files) command shows all files currently opened by processes
+belonging to user "ujjwalprakash". Each row shows the process name (COMMAND), its
+PID (Process ID), the file descriptor type (FD), and the full file path (NAME). The
+FD column uses codes: "cwd" = current working directory, "txt" = program text/code.
+This tool is critical in diagnosing logging issues because if a log file is held open
+by a process that has already been deleted from disk, lsof will show "(deleted)" in
+the NAME column — a common cause of "phantom" logging where data is written but
+never appears on disk after a log rotation.
+
+=========================================================
+COMMAND 2: Inspect File Descriptors of Current Shell
+=========================================================
+
+Command Executed:
+$ ls -l /dev/fd/
+
+Output:
+total 0
+pr--r-----  0 ujjwalprakash  staff          0 Jul  1 21:11 0
+p-w--w----  0 ujjwalprakash  staff          0 Jul  1 21:11 1
+c-w--w--w-  1 root           wheel  0x3000002 Jul  1 21:11 2
+dr--r--r--  3 ujjwalprakash  staff         96 Jul  1 21:09 3
+srw-rw-rw-  0 ujjwalprakash  staff          0 Jan  1  1970 4
+dr--r--r--  1 root           wheel          0 May 30 16:29 5
+
+Observation:
+Every process in Linux has three standard file descriptors automatically:
+  - FD 0 (stdin): Standard input — reads from the keyboard/pipe (pr--r-----)
+  - FD 1 (stdout): Standard output — where normal output is sent (p-w--w----)
+  - FD 2 (stderr): Standard error — where error messages go (c-w--w--w-)
+The 'p' prefix in permissions indicates a named pipe (FIFO). FD 3 is a directory,
+and FD 4 is a socket. Understanding that stdout and stderr are separate streams
+(FD 1 and FD 2) is fundamental to diagnosing why an application's errors might not
+appear in its log file — if the app only redirects stdout (FD 1), stderr errors
+will still go to the terminal.
+
+=========================================================
+COMMAND 3: Standard Output Redirection (>)
+=========================================================
+
+Command Executed:
+$ echo "Hello from Ujjwal Prakash - Output Redirection Test" > output.txt
+$ cat output.txt
+
+Output:
+Hello from Ujjwal Prakash - Output Redirection Test
+
+Observation:
+The > operator redirects stdout (file descriptor 1) to a file. The shell opens
+output.txt for writing, truncating it if it exists, and connects FD 1 to that
+file. Any output that echo sends to FD 1 goes into the file instead of the terminal.
+In an application logging context, if the application's main log statements use
+stdout, the operator would redirect it like: ./app > /var/log/app.log. Using >>
+instead of > would append rather than overwrite, which is more appropriate for
+persistent logging.
+
+=========================================================
+COMMAND 4: Standard Error Redirection (2>)
+=========================================================
+
+Command Executed:
+$ ls /nonexistentpath123 2> error.txt
+$ cat error.txt
+
+Output:
+ls: /nonexistentpath123: No such file or directory
+
+Observation:
+The 2> operator specifically redirects stderr (file descriptor 2) to a file.
+The number 2 before > explicitly tells the shell to redirect FD 2 (error stream).
+When I ran ls on a nonexistent path, the error message was captured in error.txt
+instead of appearing on the terminal. This is extremely relevant to the logging
+issue — if the application was only using > without 2>, its error messages would
+never be saved to the log file and would instead appear on the console (or be lost
+entirely if there was no terminal attached, as with a background daemon).
+
+=========================================================
+COMMAND 5: Combined Stdout and Stderr Redirection (> file 2>&1)
+=========================================================
+
+Command Executed:
+$ ls /etc /invalidpath_xyz > result.txt 2>&1
+$ cat result.txt
+
+Output:
+ls: /invalidpath_xyz: No such file or directory
+/etc:
+afpovertcp.cfg
+aliases
+aliases.db
+apache2
+asl
+asl.conf
+auto_home
+auto_master
+...
+[full listing of /etc directory contents]
+
+Observation:
+The pattern > result.txt 2>&1 redirects both stdout (FD 1) and stderr (FD 2) to
+the same file. First, stdout is redirected to result.txt (> result.txt). Then,
+stderr is redirected to wherever stdout currently points (2>&1), which is now
+result.txt. The result.txt file contains both the error message ("ls: /invalidpath_xyz:
+No such file or directory") and the successful listing of /etc. This is the correct
+way to log everything — both normal output and errors — to a single log file.
+This was likely the missing configuration in the problematic application.
+
+=========================================================
+COMMAND 6: Append Redirection (>>)
+=========================================================
+
+Command Executed:
+$ echo "--- Session ended at $(date) ---" >> output.txt
+$ cat output.txt
+
+Output:
+Hello from Ujjwal Prakash - Output Redirection Test
+--- Session ended at Tue Jul  1 21:11:45 IST 2026 ---
+
+Observation:
+The >> operator appends to a file rather than overwriting it. This is the correct
+operator to use for log files. Using > would overwrite previous entries each time
+the application starts, making historical logs unrecoverable. Using >> preserves
+all previous log entries. In production environments, log files are appended to
+continuously and then rotated (renamed and compressed) by log management tools
+like logrotate.
+
+=========================================================
+COMMAND 7: Check Resource Limits (ulimit)
+=========================================================
+
+Command Executed:
+$ ulimit -a
+
+Output:
+-t: cpu time (seconds)              unlimited
+-f: file size (blocks)              unlimited
+-d: data seg size (kbytes)          unlimited
+-s: stack size (kbytes)             8176
+-c: core file size (blocks)         0
+-v: address space (kbytes)          unlimited
+-l: locked-in-memory size (kbytes)  unlimited
+-u: processes                       1333
+-n: file descriptors                1048575
+
+Observation:
+The ulimit -a command lists all resource limits for the current shell session.
+The most relevant limit for our logging investigation is -n (file descriptors),
+which is set to 1048575 — meaning the current shell and its child processes can
+have up to ~1 million files open simultaneously. If this limit was too low (e.g.,
+1024 in older Linux systems), an application that opens many log files, database
+connections, and network sockets simultaneously could fail with "Too many open files"
+errors — exactly the type of logging issue we were investigating. The process limit
+(-u) of 1333 means this user can have up to 1333 processes running concurrently.
+Core file size is 0, meaning crashed programs won't generate core dumps (useful to
+enable during debugging: ulimit -c unlimited).
+
+=========================================================
+FILE I/O CONCEPTS — TECHNICAL SUMMARY
+=========================================================
+
+How Linux Manages File I/O:
+
+1. EVERYTHING IS A FILE: In Linux, not just regular files but also devices,
+   sockets, and pipes are represented as file descriptors. This unified model
+   makes I/O operations consistent across all types.
+
+2. STANDARD STREAMS:
+   - stdin  (FD 0): Input stream (keyboard or pipe)
+   - stdout (FD 1): Output stream (terminal or file)
+   - stderr (FD 2): Error stream (terminal or file)
+
+3. REDIRECTION OPERATORS:
+   - >   : Redirect stdout to a file (overwrite)
+   - >>  : Redirect stdout to a file (append)
+   - 2>  : Redirect stderr to a file
+   - 2>> : Redirect stderr to a file (append)
+   - 2>&1: Merge stderr into stdout
+
+4. OPEN FILES AND INODES: When a file is opened, the OS creates a file descriptor
+   that points to an open file table entry, which in turn points to the inode.
+   If a file is deleted while open, the inode is not freed until FD is closed.
+
+5. RESOURCE LIMITS: ulimit controls per-process resource usage to prevent any
+   single process from consuming all system resources, which would crash the OS.
+
+=========================================================
+DIAGNOSIS AND FIX FOR THE LOGGING ISSUE:
+=========================================================
+Based on the investigation, the likely cause of the application logging issues was:
+a) The application was using > instead of >> for log files, overwriting entries.
+b) Error messages were going to stderr (FD 2) which was not being captured, so
+   errors were silently lost when running as a background daemon.
+
+Recommended fix for the application's log command:
+  ./application >> /var/log/app.log 2>&1
+
+This ensures both stdout and stderr are appended to the same log file, preserving
+all historical entries and capturing all error messages.
+=========================================================

@@ -1,0 +1,257 @@
+=========================================================
+   STORAGE HEALTH ASSESSMENT AND DOCUMENTATION
+   Submitted by: Ujjwal Prakash
+   Date: July 1, 2026
+   Purpose: Pre-deployment storage assessment for a new application server
+   (Report created and edited using vi editor)
+=========================================================
+
+OBJECTIVE:
+Before deploying a new application server, conduct a thorough assessment of available
+storage resources. Document disk layout, filesystem health, inode utilization, and
+provide recommendations for improving storage efficiency to support the application's
+storage requirements long-term.
+
+=========================================================
+vi EDITOR OPERATIONS LOG
+=========================================================
+
+Step 1 — Open vi editor:
+$ vi Storage_Assessment_Report.txt
+
+Step 2 — Enter INSERT mode:
+Pressed: i
+(Status bar shows: -- INSERT --)
+
+Step 3 — Write report content in insert mode.
+
+Step 4 — Save without exiting:
+Pressed: Esc, then typed: :w, then pressed Enter.
+
+Step 5 — Exit vi:
+Pressed: Esc, then typed: :q, then pressed Enter.
+(Alternative: :wq saves and quits in one command)
+
+Note: During editing, I also used:
+- :set number  (to show line numbers)
+- dd           (to delete a line)
+- yy / p       (to copy and paste a line)
+- :%s/old/new/g (find and replace text)
+
+=========================================================
+COMMAND 1: List Storage Devices
+=========================================================
+
+Command Executed:
+$ diskutil list
+
+Output:
+/dev/disk0 (internal, physical):
+   #:                       TYPE NAME                    SIZE       IDENTIFIER
+   0:      GUID_partition_scheme                        *251.0 GB   disk0
+   1:             Apple_APFS_ISC Container disk1         524.3 MB   disk0s1
+   2:                 Apple_APFS Container disk3         245.1 GB   disk0s2
+   3:        Apple_APFS_Recovery Container disk2         5.4 GB     disk0s3
+
+/dev/disk3 (synthesized):
+   #:                       TYPE NAME                    SIZE       IDENTIFIER
+   0:      APFS Container Scheme -                      +245.1 GB   disk3
+                                 Physical Store disk0s2
+   1:                APFS Volume Macintosh HD            17.9 GB    disk3s1
+   2:              APFS Snapshot com.apple.os.update-... 17.9 GB    disk3s1s1
+   3:                APFS Volume Preboot                 16.7 GB    disk3s2
+   4:                APFS Volume Recovery                2.6 GB     disk3s3
+   5:                APFS Volume Macintosh HD - Data     133.6 GB   disk3s5
+   6:                APFS Volume VM                      3.2 GB     disk3s6
+
+Observation:
+The physical storage device is a single internal 251 GB disk (disk0) using a GUID
+Partition Table (GPT) scheme. The disk is divided into three main containers: an
+ISC boot container (524 MB), the primary APFS container (245.1 GB, which holds the
+OS and data), and a recovery partition (5.4 GB). Within the APFS container (disk3),
+there are 6 volumes — most importantly "Macintosh HD" for the OS (17.9 GB) and
+"Macintosh HD - Data" for user data (133.6 GB). The APFS (Apple File System) is a
+modern filesystem supporting snapshots, clones, and space sharing within containers.
+
+=========================================================
+COMMAND 2: Check Mounted Filesystems and Usage
+=========================================================
+
+Command Executed:
+$ df -h
+
+Output:
+Filesystem        Size    Used   Avail Capacity  Mounted on
+/dev/disk3s1s1   228Gi    17Gi    65Gi    21%    /
+devfs            201Ki   201Ki     0Bi   100%    /dev
+/dev/disk3s6     228Gi   3.0Gi    65Gi     5%    /System/Volumes/VM
+/dev/disk3s2     228Gi    16Gi    65Gi    20%    /System/Volumes/Preboot
+/dev/disk3s4     228Gi   765Mi    65Gi     2%    /System/Volumes/Update
+/dev/disk1s2     500Mi   6.0Mi   482Mi     2%    /System/Volumes/xarts
+/dev/disk1s1     500Mi   5.8Mi   482Mi     2%    /System/Volumes/iSCPreboot
+/dev/disk1s3     500Mi   1.4Mi   482Mi     1%    /System/Volumes/Hardware
+/dev/disk3s5     228Gi   124Gi    65Gi    66%    /System/Volumes/Data
+map auto_home      0Bi     0Bi     0Bi   100%    /System/Volumes/Data/home
+/dev/disk2s1     5.0Gi   2.0Gi   3.0Gi    40%    /System/Volumes/Update/SFR/mnt1
+/dev/disk3s1     228Gi    17Gi    65Gi    21%    /System/Volumes/Update/mnt1
+
+Observation:
+The most important volume to monitor is /dev/disk3s5 mounted at /System/Volumes/Data,
+which holds all user data. It is currently at 66% capacity — 124 GB used out of a
+shared pool of 228 GB, with 65 GB remaining. The APFS container allows all volumes
+to share the same pool of free space (65 GB), so the "Size" column shows the same
+228 GB for most volumes. The /dev directory (devfs) shows 100% capacity which is
+normal — it's a virtual filesystem for device files and doesn't actually consume disk
+space. The VM volume (3 GB) is used for virtual memory swap space, which is normal
+behavior when physical RAM is under pressure.
+
+=========================================================
+COMMAND 3: Check Disk Usage of Home Directory
+=========================================================
+
+Command Executed:
+$ du -sh /Users/ujjwalprakash
+
+Output:
+ 65G    /Users/ujjwalprakash
+
+Observation:
+The home directory /Users/ujjwalprakash consumes approximately 65 GB of storage.
+Given that the data volume has 124 GB used and 65 GB free, this single home directory
+accounts for a very significant portion of the used storage. This is noteworthy for
+the new application deployment — if the application also stores large files or logs,
+additional storage allocation planning is required. The du -sh command gives a
+human-readable summary (-h) of the total disk usage (-s) for a directory tree
+without listing individual files.
+
+=========================================================
+COMMAND 4: Inode Utilization Analysis
+=========================================================
+
+Command Executed:
+$ df -i
+
+Output:
+Filesystem     512-blocks      Used  Available Capacity  iused     ifree %iused  Mounted on
+/dev/disk3s1s1  478724992  34938480  136970800    21%    446774 684854000    0%   /
+devfs                 402       402          0   100%       696         0  100%   /dev
+/dev/disk3s6    478724992   6291560  136970800     5%         3 684854000    0%   /System/Volumes/VM
+/dev/disk3s2    478724992  32697032  136970800    20%      1993 684854000    0%   /System/Volumes/Preboot
+/dev/disk3s4    478724992   1566144  136970800     2%       485 684854000    0%   /System/Volumes/Update
+/dev/disk1s2      1024000     12328    987360      2%         1   4936800    0%   /System/Volumes/xarts
+/dev/disk1s1      1024000     11816    987360      2%        34   4936800    0%   /System/Volumes/iSCPreboot
+/dev/disk1s3      1024000      2776    987360      1%       103   4936800    0%   /System/Volumes/Hardware
+/dev/disk3s5    478724992 260976128  136970800    66%   1987588 684854000    0%   /System/Volumes/Data
+map auto_home           0         0          0   100%         0         0     -   /System/Volumes/Data/home
+
+Observation:
+Inode utilization is extremely healthy across all volumes. The main data volume
+(disk3s5) has used 1,987,588 inodes out of 684,854,000 available, which is only
+0.29% utilization — essentially zero. The root volume (disk3s1s1) has used 446,774
+inodes out of 684,854,000, also only 0.07% used. On APFS, inode exhaustion is
+virtually impossible because APFS dynamically allocates inodes unlike older filesystems
+(like ext3/ext4 with fixed inode counts). This is a significant advantage for
+application servers that create thousands of small files (e.g., mail servers, web
+apps with per-user files). Inode exhaustion is a rare but serious issue — when all
+inodes are consumed, no new files can be created even if disk space remains.
+
+=========================================================
+COMMAND 5: Detailed Partition Information
+=========================================================
+
+Command Executed:
+$ diskutil info disk3s5
+
+Output (key fields):
+   Device Identifier:         disk3s5
+   Device Node:               /dev/disk3s5
+   Volume Name:               Macintosh HD - Data
+   File System:               APFS
+   Disk Size:                 245.1 GB (245107195904 Bytes)
+   Space Used by Volumes:     133.6 GB (143497650176 Bytes)
+   Space in Shared Pool:      65.1 GB (69921366016 Bytes)
+   SMART Status:              Verified
+
+Observation:
+The SMART (Self-Monitoring, Analysis, and Reporting Technology) status shows
+"Verified" — meaning the physical disk has no detected hardware faults or failing
+sectors. This is critical information for a new application server deployment.
+A SMART status of "Failing" would indicate imminent disk failure and would require
+immediate replacement before any deployment. The 245 GB total disk size broken into
+133.6 GB used, with 65.1 GB available in the shared pool, confirms the earlier df
+output and validates storage is adequate for a moderate deployment.
+
+=========================================================
+STORAGE SUMMARY TABLE
+=========================================================
+
+| Volume              | Size   | Used   | Avail  | Capacity | Mount Point        |
+|---------------------|--------|--------|--------|----------|--------------------|
+| System (OS)         | 228 GB | 17 GB  | 65 GB  | 21%      | /                  |
+| User Data           | 228 GB | 124 GB | 65 GB  | 66%      | /System/Volumes/Data|
+| Virtual Memory      | 228 GB | 3 GB   | 65 GB  | 5%       | /VM                |
+| Preboot             | 228 GB | 16 GB  | 65 GB  | 20%      | /Preboot           |
+| Recovery            | 5.0 GB | 2.0 GB | 3.0 GB | 40%      | /SFR               |
+| Home Directory      | N/A    | ~65 GB | N/A    | N/A      | /Users/ujjwalprakash|
+
+=========================================================
+STORAGE HEALTH OBSERVATIONS
+=========================================================
+
+1. OVERALL HEALTH: GOOD — SMART status is "Verified" with no hardware errors.
+
+2. CAPACITY CONCERN: The user data volume at 66% capacity warrants monitoring.
+   The general best practice is to alert at 80% and take action before hitting 90%.
+   With 65 GB free, there is adequate headroom for a moderate application deployment.
+
+3. INODE STATUS: EXCELLENT — less than 0.3% inode utilization on all volumes.
+   No risk of inode exhaustion under normal application usage patterns.
+
+4. SWAP/VM: 3 GB of swap space is in use, which may indicate memory pressure.
+   Consider monitoring RAM usage; excessive swap can severely impact application
+   performance due to disk I/O being 100x slower than RAM access.
+
+5. FILESYSTEM TYPE: APFS is a modern, robust filesystem with journaling, snapshots,
+   encryption, and dynamic inode allocation — appropriate for both development
+   and production workloads.
+
+=========================================================
+RECOMMENDATIONS FOR IMPROVING STORAGE UTILIZATION
+=========================================================
+
+1. CLEAN HOME DIRECTORY: At 65 GB, the home directory is large. Running:
+      du -sh ~/Downloads ~/Movies ~/Library/Caches
+   can identify the largest consumers for targeted cleanup.
+
+2. REMOVE UNUSED DOCKER IMAGES (if applicable):
+      docker system prune -a
+   Docker images can consume tens of gigabytes silently.
+
+3. MONITOR DISK USAGE PERIODICALLY: Set up a scheduled check (cron job) that
+   alerts when usage exceeds 80%:
+      df -h | awk '{ if ($5+0 > 80) print $0 }'
+
+4. ARCHIVE OLD LOG FILES: Compress logs older than 30 days using:
+      find /var/log -name "*.log" -mtime +30 -exec gzip {} \;
+   This can reduce log storage by 70-90%.
+
+5. MONITOR INODE USAGE FOR APPLICATION: If the new application creates many
+   small files (thumbnails, temp files, cache), monitor inode usage with:
+      df -i /System/Volumes/Data
+
+6. ENABLE SNAPSHOTS CAUTIOUSLY: While APFS snapshots are useful for recovery,
+   they consume space from the shared pool. Delete old snapshots:
+      tmutil deletelocalsnapshots /
+
+7. PLAN FOR GROWTH: If application storage requirements exceed 40 GB annually,
+   plan for an external SSD expansion or cloud storage integration before the
+   data volume reaches 80% capacity.
+
+=========================================================
+CONCLUSION:
+The storage environment is healthy and suitable for the planned application deployment.
+The 65 GB of available shared pool space provides sufficient headroom for initial
+deployment, but storage growth should be actively monitored. No immediate hardware
+or filesystem issues were detected. The primary action item before deployment is to
+clean up the home directory and establish automated disk usage monitoring.
+=========================================================
